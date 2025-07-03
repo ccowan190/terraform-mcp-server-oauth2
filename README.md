@@ -1,251 +1,253 @@
-# <img src="public/images/Terraform-LogoMark_onDark.svg" width="30" align="left" style="margin-right: 12px;"/> Terraform MCP Server
+# Terraform MCP Server with OAuth2 Authentication
 
-The Terraform MCP Server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction)
-server that provides seamless integration with Terraform Registry APIs, enabling advanced
-automation and interaction capabilities for Infrastructure as Code (IaC) development.
+A HashiCorp Terraform MCP (Model Context Protocol) server enhanced with OAuth2 authentication support for seamless Claude.ai integration.
 
-## Features
+## 🚀 Features
 
-- **Dual Transport Support**: Both Stdio and StreamableHTTP transports
-- **Terraform Provider Discovery**: Query and explore Terraform providers and their documentation
-- **Module Search & Analysis**: Search and retrieve detailed information about Terraform modules
-- **Registry Integration**: Direct integration with Terraform Registry APIs
-- **Container Ready**: Docker support for easy deployment
+- **OAuth2 Authentication**: Google OAuth2 integration for Claude.ai
+- **Dual Authentication**: OAuth2 with Cloud Run IAM fallback
+- **HundredX Integration**: Domain validation for @hundredxinc.com accounts
+- **Claude.ai Ready**: Direct integration with Claude.ai remote MCP servers
+- **Secure**: Session token management with expiration
+- **Monitoring**: Health and authentication status endpoints
 
-> **Caution:** The outputs and recommendations provided by the MCP server are generated dynamically and may vary based on the query, model, and the connected MCP server. Users should **thoroughly review all outputs/recommendations** to ensure they align with their organization's **security best practices**, **cost-efficiency goals**, and **compliance requirements** before implementation.
+## 🏗️ Architecture
 
-## Prerequisites
-
-1. To run the server in a container, you will need to have [Docker](https://www.docker.com/) installed.
-2. Once Docker is installed, you will need to ensure Docker is running.
-
-## Transport Support
-
-The Terraform MCP Server supports multiple transport protocols:
-
-### 1. Stdio Transport (Default)
-Standard input/output communication using JSON-RPC messages. Ideal for local development and direct integration with MCP clients.
-
-### 2. StreamableHTTP Transport
-Modern HTTP-based transport supporting both direct HTTP requests and Server-Sent Events (SSE) streams. This is the recommended transport for remote/distributed setups.
-
-**Features:**
-- **Endpoint**: `http://{hostname}:8080/mcp`
-- **Health Check**: `http://{hostname}:8080/health`
-- **Environment Configuration**: Set `TRANSPORT_MODE=http` or `TRANSPORT_PORT=8080` to enable
-
-**Environment Variables:**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TRANSPORT_MODE` | Set to `http` to enable HTTP transport | `stdio` |
-| `TRANSPORT_HOST` | Host to bind the HTTP server | `0.0.0.0` |
-| `TRANSPORT_PORT` | HTTP server port | `8080` |
-
-## Command Line Options
-
-```bash
-# Stdio mode
-terraform-mcp-server stdio [--log-file /path/to/log]
-
-# HTTP mode
-terraform-mcp-server http [--transport-port 8080] [--transport-host 0.0.0.0] [--log-file /path/to/log]
+```
+Claude.ai → OAuth2 Flow → Terraform MCP Server → Terraform Registry
+                ↓
+        Google Authentication
+                ↓
+        HundredX Domain Validation
 ```
 
-## Installation
-
-### Usage with VS Code
-
-Add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`. 
-
-More about using MCP server tools in VS Code's [agent mode documentation](https://code.visualstudio.com/docs/copilot/chat/mcp-servers).
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "terraform": {
-        "command": "docker",
-        "args": [
-          "run",
-          "-i",
-          "--rm",
-          "hashicorp/terraform-mcp-server"
-        ]
-      }
-    }
-  }
-}
-```
-
-Optionally, you can add a similar example (i.e. without the mcp key) to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
-
-```json
-{
-  "servers": {
-    "terraform": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "hashicorp/terraform-mcp-server"
-      ]
-    }
-  }
-}
-```
-
-### Usage with Claude Desktop / Amazon Q Developer / Amazon Q CLI
-
-More about using MCP server tools in Claude Desktop [user documentation](https://modelcontextprotocol.io/quickstart/user).
-Read more about using MCP server in Amazon Q from the [documentation](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/qdev-mcp.html).
-
-```json
-{
-  "mcpServers": {
-    "terraform": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "hashicorp/terraform-mcp-server"
-      ]
-    }
-  }
-}
-```
-
-## Tool Configuration
-
-### Available Toolsets
-
-The following sets of tools are available:
-
-| Toolset     | Tool                   | Description                                                                                                                                                                                                                                                    |
-|-------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `providers` | `resolveProviderDocID` | Queries the Terraform Registry to find and list available documentation for a specific provider using the specified `serviceSlug`. Returns a list of provider document IDs with their titles and categories for resources, data sources, functions, or guides. |
-| `providers` | `getProviderDocs`      | Fetches the complete documentation content for a specific provider resource, data source, or function using a document ID obtained from the `resolveProviderDocID` tool. Returns the raw documentation in markdown format.                                     |
-| `modules`   | `searchModules`        | Searches the Terraform Registry for modules based on specified `moduleQuery` with pagination. Returns a list of module IDs with their names, descriptions, download counts, verification status, and publish dates                                             |
-| `modules`   | `moduleDetails`        | Retrieves detailed documentation for a module using a module ID obtained from the `searchModules` tool including inputs, outputs, configuration, submodules, and examples.                                                                                     |
-| `policies`  | `searchPolicies`       | Queries the Terraform Registry to find and list the appropriate Sentinel Policy based on the provided query `policyQuery`. Returns a list of matching policies with terraformPolicyIDs with their name, title and download counts.                             |
-| `policies`  | `policyDetails`        | Retrieves detailed documentation for a policy set using a terraformPolicyID obtained from the `searchPolicies` tool including policy readme and implementation details.                                                                                        |
-### Install from source
-
-Use the latest release version:
-
-```console
-go install github.com/hashicorp/terraform-mcp-server/cmd/terraform-mcp-server@latest
-```
-
-Use the main branch:
-
-```console
-go install github.com/hashicorp/terraform-mcp-server/cmd/terraform-mcp-server@main
-```
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "terraform": {
-        "command": "/path/to/terraform-mcp-server",
-        "args": ["stdio"]
-      }
-    }
-  }
-}
-```
-
-## Building the Docker Image locally
-
-Before using the server, you need to build the Docker image locally:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/hashicorp/terraform-mcp-server.git
-cd terraform-mcp-server
-```
-
-2. Build the Docker image:
-```bash
-make docker-build
-```
-
-3. This will create a local Docker image that you can use in the following configuration.
-
-```bash
-# Run in stdio mode
-docker run -i --rm terraform-mcp-server:dev
-
-# Run in http mode
-docker run -p 8080:8080 --rm -e MODE=http terraform-mcp-server:dev
-```
-
-4. (Optional) Test connection in http mode
-  
-```bash
-# Test the connection
-curl http://localhost:8080/health
-```
-
-5. You can use it on your AI assistant as follow:
-
-```json
-{
-  "mcpServers": {
-    "terraform": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "terraform-mcp-server:dev"
-      ]
-    }
-  }
-}
-```
-
-## Development
+## 📦 Installation
 
 ### Prerequisites
-- Go (check [go.mod](./go.mod) file for specific version)
-- Docker (optional, for container builds)
+- Docker
+- Google Cloud SDK (`gcloud`)
+- Google Cloud project with OAuth2 credentials
 
-### Available Make Commands
+### Quick Start
 
-| Command | Description |
-|---------|-------------|
-| `make build` | Build the binary |
-| `make test` | Run all tests |
-| `make test-e2e` | Run end-to-end tests |
-| `make docker-build` | Build Docker image |
-| `make run-http` | Run HTTP server locally |
-| `make docker-run-http` | Run HTTP server in Docker |
-| `make test-http` | Test HTTP health endpoint |
-| `make clean` | Remove build artifacts |
-| `make help` | Show all available commands |
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/ccowan190/terraform-mcp-server-oauth2.git
+   cd terraform-mcp-server-oauth2
+   ```
 
-## Contributing
+2. **Set up OAuth2 credentials**:
+   ```bash
+   ./create-oauth2-credentials.sh
+   ```
+
+3. **Configure environment variables**:
+   ```bash
+   export OAUTH2_CLIENT_ID="your-google-client-id"
+   export OAUTH2_CLIENT_SECRET="your-google-client-secret"
+   ```
+
+4. **Deploy to Google Cloud Run**:
+   ```bash
+   ./deploy-oauth2.sh
+   ```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OAUTH2_CLIENT_ID` | Google OAuth2 Client ID | Optional* |
+| `OAUTH2_CLIENT_SECRET` | Google OAuth2 Client Secret | Optional* |
+| `OAUTH2_REDIRECT_URL` | OAuth2 callback URL | Optional |
+| `MODE` | Server mode (`http` or `stdio`) | No |
+| `TRANSPORT_PORT` | HTTP server port | No |
+
+*If not provided, server falls back to Cloud Run IAM authentication
+
+### OAuth2 Setup
+
+1. **Create OAuth2 Credentials** in [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
+   - Application type: Web application
+   - Name: Terraform MCP Server for Claude.ai
+   - Authorized origins: `https://claude.ai`, `https://api.anthropic.com`
+   - Redirect URIs: `https://claude.ai/oauth/callback`, `https://api.anthropic.com/oauth/callback`
+
+2. **Configure OAuth Consent Screen**:
+   - User Type: Internal (for organization use)
+   - App name: Terraform MCP Server
+   - Scopes: email, profile, openid
+
+## 🌐 API Endpoints
+
+### Health Check
+```http
+GET /health
+```
+Response:
+```json
+{
+  "status": "ok",
+  "service": "terraform-mcp-server",
+  "transport": "streamable-http",
+  "auth": "oauth2|iam"
+}
+```
+
+### Authentication Status
+```http
+GET /auth/status
+```
+Response:
+```json
+{
+  "auth_type": "oauth2|iam",
+  "auth_enabled": true,
+  "login_url": "/oauth/login"
+}
+```
+
+### OAuth2 Authentication (when enabled)
+```http
+GET /oauth/login          # Initiates OAuth2 flow
+GET /oauth/callback       # Handles OAuth2 callback
+```
+
+### MCP Protocol
+```http
+POST /mcp                 # Terraform MCP operations (requires auth)
+```
+
+## 🔐 Claude.ai Integration
+
+### Option 1: OAuth2 Authentication (Recommended)
+1. Deploy with OAuth2 credentials configured
+2. In Claude.ai integration settings:
+   - **Service URL**: `https://your-service-url/mcp`
+   - **OAuth Client ID**: Your Google OAuth2 Client ID
+
+### Option 2: Proxy Method (Development)
+```bash
+# Start authenticated proxy
+gcloud run services proxy terraform-mcp-server --region=us-central1 --project=your-project --port=8080
+
+# Configure Claude Desktop
+# URL: http://localhost:8080/mcp
+```
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+```bash
+./test-oauth2.sh
+```
+
+Tests include:
+- Health check endpoint
+- Authentication status
+- MCP endpoint protection
+- OAuth2 flow (when enabled)
+
+## 🛡️ Security Features
+
+- **Domain Validation**: Only @hundredxinc.com email addresses allowed
+- **Token Expiration**: Session tokens expire after 1 hour
+- **HTTPS Only**: All OAuth2 flows use secure connections
+- **IAM Fallback**: Cloud Run IAM security when OAuth2 not configured
+
+## 📁 Project Structure
+
+```
+├── cmd/terraform-mcp-server/     # Main server code
+│   ├── main.go                   # Server entry point with OAuth2 support
+│   └── init.go                   # Initialization and configuration
+├── pkg/oauth2/                   # OAuth2 authentication package
+│   └── oauth2.go                 # OAuth2 handler implementation
+├── deploy-oauth2.sh              # Deployment script
+├── test-oauth2.sh                # Testing script
+├── create-oauth2-credentials.sh  # OAuth2 setup guide
+└── README.md                     # This file
+```
+
+## 🚀 Deployment
+
+### Google Cloud Run
+```bash
+# Build and deploy
+./deploy-oauth2.sh
+
+# Or manually:
+docker build -t gcr.io/your-project/terraform-mcp-server:oauth2 .
+docker push gcr.io/your-project/terraform-mcp-server:oauth2
+gcloud run deploy terraform-mcp-server \
+  --image=gcr.io/your-project/terraform-mcp-server:oauth2 \
+  --set-env-vars="OAUTH2_CLIENT_ID=your-id,OAUTH2_CLIENT_SECRET=your-secret"
+```
+
+### Local Development
+```bash
+# Run locally with OAuth2
+docker run -p 8080:8080 \
+  -e MODE=http \
+  -e OAUTH2_CLIENT_ID=your-id \
+  -e OAUTH2_CLIENT_SECRET=your-secret \
+  terraform-mcp-server:oauth2
+```
+
+## 🔄 Authentication Modes
+
+### OAuth2 Mode
+- **Enabled**: When `OAUTH2_CLIENT_ID` and `OAUTH2_CLIENT_SECRET` are set
+- **Flow**: Google OAuth2 → Domain validation → Session token
+- **Claude.ai**: Direct integration with OAuth Client ID
+
+### IAM Mode (Fallback)
+- **Enabled**: When OAuth2 credentials are not configured
+- **Flow**: Google Cloud IAM authentication
+- **Claude.ai**: Requires proxy or service account
+
+## 📊 Monitoring
+
+Monitor your deployment:
+```bash
+# Check health
+curl https://your-service-url/health
+
+# Check auth status
+curl https://your-service-url/auth/status
+
+# View logs
+gcloud run services logs read terraform-mcp-server --region=us-central1
+```
+
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch
+2. Create a feature branch
 3. Make your changes
-4. Run tests
+4. Add tests
 5. Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the terms of the MPL-2.0 open source license. Please refer to [LICENSE](./LICENSE) file for the full terms.
+This project is based on HashiCorp's terraform-mcp-server and includes OAuth2 enhancements.
 
-## Security
+## 🆘 Support
 
-For security issues, please contact security@hashicorp.com or follow our [security policy](https://www.hashicorp.com/en/trust/security/vulnerability-management).
+- **Issues**: [GitHub Issues](https://github.com/ccowan190/terraform-mcp-server-oauth2/issues)
+- **Documentation**: See `/docs` folder for detailed guides
+- **Contact**: File an issue or reach out via GitHub
 
-## Support
+## 🎯 Roadmap
 
-For bug reports and feature requests, please open an issue on GitHub.
+- [ ] JWT token signing for enhanced security
+- [ ] Multiple OAuth2 provider support
+- [ ] Advanced session management
+- [ ] Audit logging
+- [ ] Rate limiting
+- [ ] Custom domain validation rules
 
-For general questions and discussions, open a GitHub Discussion.
+---
+
+Built with ❤️ for the Claude.ai and Terraform communities.
