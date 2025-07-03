@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/terraform-mcp-server/pkg/oauth2"
 	"github.com/hashicorp/terraform-mcp-server/version"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -90,6 +91,13 @@ func runHTTPServer(logger *log.Logger, host string, port string) error {
 }
 
 func httpServerInit(ctx context.Context, hcServer *server.MCPServer, logger *log.Logger, host string, port string) error {
+	// Initialize OAuth2 handler
+	oauth2Handler, err := oauth2.NewOAuth2Handler(logger)
+	if err != nil {
+		logger.Warnf("OAuth2 not configured: %v. Falling back to IAM authentication.", err)
+		oauth2Handler = nil
+	}
+
 	// Create StreamableHTTP server which implements the new streamable-http transport
 	// This is the modern MCP transport that supports both direct HTTP responses and SSE streams
 	streamableServer := server.NewStreamableHTTPServer(hcServer,
@@ -99,15 +107,41 @@ func httpServerInit(ctx context.Context, hcServer *server.MCPServer, logger *log
 
 	mux := http.NewServeMux()
 
-	// Handle the /mcp endpoint with the StreamableHTTP server
-	mux.Handle("/mcp", streamableServer)
-	mux.Handle("/mcp/", streamableServer)
+	// Add OAuth2 endpoints if configured
+	if oauth2Handler != nil {
+		logger.Info("OAuth2 authentication enabled")
+		mux.HandleFunc("/oauth/login", oauth2Handler.HandleAuth)
+		mux.HandleFunc("/oauth/callback", oauth2Handler.HandleCallback)
+		
+		// Wrap MCP endpoints with OAuth2 authentication
+		mux.Handle("/mcp", oauth2Handler.AuthMiddleware(streamableServer))
+		mux.Handle("/mcp/", oauth2Handler.AuthMiddleware(streamableServer))
+	} else {
+		logger.Info("OAuth2 not configured - using IAM authentication")
+		// Handle the /mcp endpoint without OAuth2 authentication (relies on Cloud Run IAM)
+		mux.Handle("/mcp", streamableServer)
+		mux.Handle("/mcp/", streamableServer)
+	}
 
-	// Add health check endpoint
+	// Add health check endpoint (always public)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok","service":"terraform-mcp-server","transport":"streamable-http"}`))
+		authStatus := "iam"
+		if oauth2Handler != nil {
+			authStatus = "oauth2"
+		}
+		w.Write([]byte(fmt.Sprintf(`{"status":"ok","service":"terraform-mcp-server","transport":"streamable-http","auth":"%s"}`, authStatus)))
+	})
+
+	// Add authentication status endpoint
+	mux.HandleFunc("/auth/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if oauth2Handler != nil {
+			w.Write([]byte(`{"auth_type":"oauth2","auth_enabled":true,"login_url":"/oauth/login"}`))
+		} else {
+			w.Write([]byte(`{"auth_type":"iam","auth_enabled":true,"login_url":null}`))
+		}
 	})
 
 	addr := fmt.Sprintf("%s:%s", host, port)
@@ -123,7 +157,11 @@ func httpServerInit(ctx context.Context, hcServer *server.MCPServer, logger *log
 	// Start server in goroutine
 	errC := make(chan error, 1)
 	go func() {
-		logger.Infof("Starting StreamableHTTP server on %s/mcp", addr)
+		if oauth2Handler != nil {
+			logger.Infof("Starting StreamableHTTP server with OAuth2 authentication on %s/mcp", addr)
+		} else {
+			logger.Infof("Starting StreamableHTTP server with IAM authentication on %s/mcp", addr)
+		}
 		errC <- httpServer.ListenAndServe()
 	}()
 
